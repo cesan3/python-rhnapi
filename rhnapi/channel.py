@@ -1296,9 +1296,9 @@ def removePackages(rhn, chanlabel, package_ids):
     package_ids(list)       - list of package IDs (ints) to remove
     """
     try:
-        return rhn.session.channel.software.removePackages(rhn.key, chanlabel, packagelist) == 1
+        return rhn.session.channel.software.removePackages(rhn.key, chanlabel, package_ids) == 1
     except Exception, E:
-        return rhn.fail(E, 'remove  package IDs %s from channel %s' % ( chanlabel, ','.join(packagelist)) )
+        return rhn.fail(E, 'remove  package IDs %s from channel %s' % (chanlabel, ','.join(package_ids)))
 
 # --------------------------------------------------------------------------------- #
 
