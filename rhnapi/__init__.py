@@ -591,8 +591,7 @@ class rhnSession(object):
             self.logErr(str(exptn.faultString).strip())
         except Exception, E:
             self.logErr(str(E))
-        # raise
-        return False
+        raise exptn
 
     def close(self):
         """
