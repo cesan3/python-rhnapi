@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 # RHN/Spacewalk API Module abstracting the 'errata' namespace
 #
-# Copyright 2009-2012 Stuart Sears
+# Copyright (c) 2009-2014 Stuart Sears
 #
 # This file is part of python-rhnapi
 #
 # python-rhnapi is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free
-# Software Foundation, either version 2 of the License, or (at your option)
+# Software Foundation, either version 3 of the License, or (at your option)
 # any later version.
 #
 # python-rhnapi is distributed in the hope that it will be useful, but WITHOUT
@@ -127,6 +127,32 @@ def clone(rhn, chanlabel, errlist):
 
 # ---------------------------------------------------------------------------------- #
 
+def cloneAsync(rhn, chanlabel, errlist):
+    """
+    API:
+    errata.cloneAsync
+
+    usage:
+    clone(rhn, chanlabel, errlist)
+    
+    description:
+    Clones errata from into a given channel
+
+    returns:
+    bool
+
+    parameters:
+    rhn                     - an authenticated RHN session
+    chanlabel(str)          - the target channel
+    errlist(list/str)       - list of erratum advisory names
+    """
+    try:
+        return rhn.session.errata.cloneAsync(rhn.key, chanlabel, errlist) == 1
+    except Exception, E:
+        return rhn.fail(E, 'clone errata %s into channel %s' % (','.join(errlist), chanlabel))
+
+# ---------------------------------------------------------------------------------- #
+
 def cloneAsOriginal(rhn, chanlabel, errlist):
     """
     API:
@@ -154,6 +180,32 @@ def cloneAsOriginal(rhn, chanlabel, errlist):
         return rhn.session.errata.cloneAsOriginal(rhn.key, chanlabel, errlist)
     except Exception, E:
         return rhn.fail(E, 'clone errata into channel %s' % chanlabel)
+
+# ---------------------------------------------------------------------------- #
+
+def cloneAsOriginalAsync(rhn, chanlabel, errlist):
+    """
+    API:
+    errata.cloneAsOriginalAsync
+
+    usage:
+    cloneAsOriginalAsync(rhn, chanlabel errlist)
+
+    description:
+    Asynchronously clones a list of errata into a cloned channel with
+    reference to the original source channel, pushing only packages that
+    are relevant to the target channel.
+
+    e.g.
+    if an erratum contains packages affecting multiple RH channels and it is
+    cloned into a channel that was cloned from RHEL5, this call only pushes
+    *relevant* packages to the destination channel, not ALL of them.
+    """
+    try:
+        return rhn.session.errata.cloneAsOriginalAsync(rhn.key, chanlabel, errlist) == 1
+    except Exception, E:
+        return rhn.fail(E, 'Asynchronously clone errata into channel %s', chanlabel)
+
 
 # ---------------------------------------------------------------------------------- #
 
@@ -199,11 +251,11 @@ def create(rhn, errobj, bugs = [], keywords = [] , packages = [], publish = Fals
     try:
         return rhn.session.errata.create(rhn.key, errobj, bugs, keywords, packages, channels)
     except Exception, E:
-        return rhn.fail(E, 'create new erratum %(erratum_name)s' % errata_info)
+        return rhn.fail(E, 'create new erratum %(erratum_name)s' % errobj)
 
 # ---------------------------------------------------------------------------------- #
 
-def createErratum(rhn, synopsis, name, release, erratatype, product = '', topic = '' , description = '', references = '' , notes = '', solution = ''):
+def createErratum(rhn, synopsis, name, release, errtype, product = '', topic = '' , description = '', references = '' , notes = '', solution = ''):
     """
     API:
     none, special simplified case of errata.create
@@ -226,7 +278,7 @@ def createErratum(rhn, synopsis, name, release, erratatype, product = '', topic 
     synopsis(str)                   - short summary of the erratum
     name(str)                       - name of the erratum
     release(int)                    - release of the erratum
-    erratumtype(str)                - one of ['Security Advisory',
+    errtype(str)                    - one of ['Security Advisory',
                                               'Product Enhancement Advisory',
                                               'Bug Fix Advisory'],
     product(str)                    - what does this erratum affect? (RPM name, OS etc)
@@ -237,7 +289,7 @@ def createErratum(rhn, synopsis, name, release, erratatype, product = '', topic 
     solutionn(str)                  - how the 'bug' was fixed (i.e. what the erratum does)
     """
     return create(rhn, { 'synopsis' : synopsis, 'erratum_name' : name, 'erratum_release' : release,
-                         'erratum_type' : erratumtype, 'product' : product, 'topic' : topic,
+                         'erratum_type' : errtype, 'product' : product, 'topic' : topic,
                          'description' : description, 'references' : references, 'solution' : solution} )
 
 # ---------------------------------------------------------------------------------- #
@@ -570,7 +622,7 @@ def publishAsOriginal(rhn, erratum, chanlist):
 
 # ---------------------------------------------------------------------------------- #
 
-def removePackages(rhn, erratum, pkglist):        
+def removePackages(rhn, erratum, packageids):        
     """
     API:
     errata.removePackages
@@ -591,7 +643,7 @@ def removePackages(rhn, erratum, pkglist):
     pkglist(list of int)    - list of package IDs to remove.
     """
     try:
-        return rhn.session.errata.removePackages(rhn.key, erratum, packages)
+        return rhn.session.errata.removePackages(rhn.key, erratum, packageids)
     except Exception, E:
         return rhn.fail(E, 'remove packages from erratum %s' % erratum)
 

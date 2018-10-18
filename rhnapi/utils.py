@@ -3,13 +3,13 @@
 # RHN/Spacewalk API Module providing additional general utilities
 # primarily for serialisation, csv output etc
 #
-# Copyright 2009-2012 Stuart Sears
+# Copyright (c) 2009-2014 Stuart Sears
 #
 # This file is part of python-rhnapi
 #
 # python-rhnapi is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free
-# Software Foundation, either version 2 of the License, or (at your option)
+# Software Foundation, either version 3 of the License, or (at your option)
 # any later version.
 #
 # python-rhnapi is distributed in the hope that it will be useful, but WITHOUT
@@ -40,7 +40,7 @@ except ImportError:
 
 from operator import itemgetter
 import time
-from  xmlrpclib import DateTime as xmlrpcDateTime
+from xmlrpclib import DateTime as xmlrpcDateTime
 import csv
 import sys
 
@@ -154,7 +154,7 @@ class RhnJSONEncoder(json.JSONEncoder):
         if isinstance(obj, set):
             return list(obj)
 
-        return simplejson.JSONEncoder.default(self, obj)
+        return json.JSONEncoder.default(self, obj)
         
 # --------------------------------------------------------------------------------- #
 
@@ -327,6 +327,101 @@ def getMaxLen(dictlist):
                 maxlen[k] = mylen
 
     return maxlen
+
+# ---------------------------------------------------------------------------- #
+
+def get_pkgstr(pkgobj):
+    """
+    returns E:NVR.A or NVR.A for a given package object, 
+    depending on whether it has an epoch or not
+    
+    parameters:
+        pkgobj(dict): a dict representing a package in RHN, usually from
+                      channel.list(AllPackages) or a similar API call.
+
+    returns:
+        string:  E:NVR.A or NVR.A, depending on the presence of an epoch
+    """
+    # this bit is always the same
+    keys = [ "%(name)s-%(version)s-%(release)s" ]
+    # arch or arch_label? (thanks, RHN!)
+    if pkgobj.get('arch_label', False):
+        keys.append(".%(arch_label)s")
+    else:
+        keys.append(".%(arch)s")
+
+    # epoch?
+    if len(pkgobj.get('epoch').strip()) != 0:
+        keys.insert(0, "%(epoch)s:")
+
+    return ''.join(keys) % pkgobj
+
+# ---------------------------------------------------------------------------- #
+
+def get_errid(errobj):
+    """
+    fetch the YYYY:NNNN part from an errata dict object
+    basically strips off the CLA/RHSA etc prefix
+
+    parameters:
+        errobj(dict): dict representing an erratum in RHN
+
+    returns:
+        string: YYYY:NNNN from an erratum
+    """
+    return errobj.get('advisory').split('-')[1]
+
+# ---------------------------------------------------------------------------- #
+
+def index_dictlist(dictlist, keyfunc):
+    """
+    generate an index for a list of dict, using a key function.
+    key MUST be a function that can take a dict as an argument.
+
+    Useful for generating an index from lists of packages etc
+
+    parameters:
+        dictlist(list of dict): list of dictionary objects (packages, errata etc)
+        keyfunc(function): a function that extracts data from a dict.
+            must take a dict as an argument.
+    """
+    try:
+        return dict( zip ((keyfunc(entry) for entry in dictlist), dictlist))
+    except:
+        return None
+
+# ---------------------------------------------------------------------------- #
+
+def batch_iterate(iterable, batchsize):
+    """
+    takes an arbitrary iterable (list, set, string etc) and returns an iterator
+    that yields the input in fixed size batches (e.g. split a list into groups of
+    50 items for batch processing)
+    if there are fewer than 'batchsize' elements remaining, return the incomplete
+    final portion
+
+    Shamelessly based on:
+    http://stackoverflow.com/questions/312443/
+    and the recipes here: (for "grouper")
+    http://docs.python.org/2/library/itertools.html?highlight=itertools#recipes
+    
+    parameters:
+    iterable        - an iterable object, such as a set or list
+    batchsize       - the number of elements to return in each batch
+
+    returns:
+    generator/iterator object, which we can loop over.
+    raises StopIteration at end
+
+    this will not pad the final batch if it is smaller than 'batchsize'
+    """
+    # harmless if already imported
+    import itertools
+
+    it = iter(iterable)
+    while True:
+       yield tuple(itertools.islice(it, batchsize)) or it.next()
+
 
 # footer - do not edit below here
 # vim: set et ai smartindent ts=4 sts=4 sw=4 ft=python:

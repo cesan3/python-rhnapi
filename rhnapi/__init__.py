@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 # RHN/Spacewalk API Module
 #
-# Copyright 2009-2012 Stuart Sears
+# Copyright (c) 2009-2014 Stuart Sears
 #
 # This file is part of python-rhnapi
 #
 # python-rhnapi is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free
-# Software Foundation, either version 2 of the License, or (at your option)
+# Software Foundation, either version 3 of the License, or (at your option)
 # any later version.
 #
 # python-rhnapi is distributed in the hope that it will be useful, but WITHOUT
@@ -86,9 +86,11 @@ import httplib
 import sys
 import re
 import os
-from ConfigParser import SafeConfigParser
+from ConfigParser import SafeConfigParser, NoOptionError, NoSectionError
 import time
 import logging
+import ssl
+from os.path import isfile, isdir
 
 # these methods could all be part of the main class, but don't need to be:
 # besides, who knows if I'll need them somewhere else in the future?
@@ -173,6 +175,16 @@ def fetchCreds(filename, servername, logger=None, debug=False):
     mylogin = None
     mypass = None
 
+    def get_item(cfg, section, option, default=None):
+        """
+        Makes configparser.get work like dict.get - returns 'None' (or default given)
+        if the option or section do not exist
+        """
+        try:
+            return cfg.get(section, option)
+        except (NoOptionError, NoSectionError):
+            return default
+
     # harmless, so just for sanity:
     srcfile = os.path.expanduser(filename)
 
@@ -186,8 +198,8 @@ def fetchCreds(filename, servername, logger=None, debug=False):
         if confparse.has_section(servername):
             if logger:
                logger.debug("found section for server %s", servername)
-            mylogin = confparse.get(servername, 'login')
-            mypass  = confparse.get(servername, 'password')
+            mylogin = get_item(confparse, servername, 'login')
+            mypass  = get_item(confparse, servername, 'password')
         else:
             if logger:
                 logger.info("No section found for server %s, using defaults", servername)
@@ -312,7 +324,8 @@ class rhnSession(object):
 
     def __init__(self, url='rhn.redhat.com', rhnlogin = None, rhnpassword = None,
                  proxyserver = None, config = None, savecreds=False, debug = False,
-                 logenable = True, logfile = None, loglevel = 20, logname = 'RHN API'):
+                 logenable = True, logfile = None, loglevel = 20, logname = 'RHN API',
+                 verify=True):
         """
         Initialize a connection to RHN (or a satellite) using the provided information.
         proxy server should be local https proxy, if available. IPaddress/Hostname:port.
@@ -335,6 +348,8 @@ class rhnSession(object):
                               (10 = debug, 20 = info, 30 = warn, 40 = error, 50 = crit/fatal)
         *logname(str)       - name to use in log messages. Defaults to 'RHN API'. Can be any string.                              
                               (for example, your script name)
+        *verify(bool|str)   - set to a CA bundle file or directory for SSL verification, or to False
+                              to disable it
         """
         # for config passing we require the hostname, let's clean up whatever we've been given:
         self.hostname = getHostname(url)
@@ -379,6 +394,22 @@ class rhnSession(object):
         if str(self._password) == 'None':
             self._password = promptPass(self.login)
 
+        ##
+        # Create custom SSL context to allow for custom CA's or
+        # verification disablement
+        if verify is False:
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+        elif type(verify) is str:
+            if isfile(verify):
+                ssl_context = ssl.create_default_context(cafile=verify)
+            elif isdir(verify):
+                ssl_context = ssl.create_default_context(capath=verify)
+            else:
+                self.logWarn("failed to load cafile or capath - using default system CA")
+        else:
+            ssl_context = ssl.create_default_context()
 
         try:
             if proxyserver is not None:
@@ -386,9 +417,9 @@ class rhnSession(object):
                 P.set_proxy(proxyserver)
 
                 # basic session initialisation
-                self.session = xmlrpclib.Server(self.rhnurl, verbose=0, transport = P)
+                self.session = xmlrpclib.Server(self.rhnurl, verbose=0, transport=P, context=ssl_context)
             else:
-                self.session = xmlrpclib.Server(self.rhnurl, verbose=0)
+                self.session = xmlrpclib.Server(self.rhnurl, verbose=0, context=ssl_context)
 
             # now we login
             self.key = self.session.auth.login(self.login, self._password)
@@ -418,7 +449,10 @@ class rhnSession(object):
 
 # ---------------------------------------------------------------------------- #
 
-    def addLogger(self, logname, logdest, loglevel, logfmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'):
+    # def addLogger(self, logname, logdest, loglevel, logfmt = '%(asctime)s - %(name)s - %(levelname)-8s - %(message)s'):
+    def addLogger(self, logname, logdest, loglevel, 
+            logfmt = '%(asctime)s %(name)s[%(process)d]: %(levelname)-8s - %(message)s',
+            datefmt = '%b %e %H:%M:%S'):
         """
         Generates self.logger, a logging.Logger instance.
 
@@ -450,7 +484,7 @@ class rhnSession(object):
         self.logger.setLevel(loglevel)
 
         # configure the format of log messages
-        formatter = logging.Formatter(logfmt)
+        formatter = logging.Formatter(logfmt, datefmt)
 
         # we should now have a functional logger, so let's configure a destination
         # this is done by adding an appropriate handler:
@@ -584,7 +618,7 @@ class rhnSession(object):
         logs and re-raises the exception passed to it
         """
         try:
-            self.logger.exception("Failed to %s" % message)
+            self.logErr("Failed to %s" % message)
             raise exptn
         except xmlrpclib.Fault, E:
             self.logErr(str(exptn.faultCode).strip())
@@ -669,7 +703,7 @@ class rhnSession(object):
             if res == 1:
                 return True
         except Exception, E:
-            return self.fail(E, '%s logout failed!' % self.username)
+            return self.fail(E, '%s logout failed!' % self.login)
 
     def encodeDate(self, datestr = None):
         """

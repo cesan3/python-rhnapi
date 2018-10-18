@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 # RHN/Spacewalk API Module abstracting the configchannel namespace
 #
-# Copyright 2009-2012 Stuart Sears
+# Copyright (c) 2009-2014 Stuart Sears
 #
 # This file is part of python-rhnapi
 #
 # python-rhnapi is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free
-# Software Foundation, either version 2 of the License, or (at your option)
+# Software Foundation, either version 3 of the License, or (at your option)
 # any later version.
 #
 # python-rhnapi is distributed in the hope that it will be useful, but WITHOUT
@@ -249,7 +249,7 @@ def detailsByLabel(rhn, chanlabel):
 
 # --------------------------------------------------------------------------------- #
 
-def createOrUpdatePath(rhn, label, path, directory = False, **kwargs):
+def createOrUpdatePath(rhn, chanlabel, path, directory=False, **kwargs):
     """
     API:
     custom implementation of the 

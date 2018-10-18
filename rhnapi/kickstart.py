@@ -3,13 +3,13 @@
 # RHN/Spacewalk API Module abstrating the kickstart namespace
 # as well as all its sub-namespaces / children
 #
-# Copyright 2009-2012 Stuart Sears
+# Copyright (c) 2009-2014 Stuart Sears
 #
 # This file is part of python-rhnapi
 #
 # python-rhnapi is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free
-# Software Foundation, either version 2 of the License, or (at your option)
+# Software Foundation, either version 3 of the License, or (at your option)
 # any later version.
 #
 # python-rhnapi is distributed in the hope that it will be useful, but WITHOUT
@@ -1505,7 +1505,7 @@ def addCryptoKeys(rhn, kslabel, cryptokeys):
     if not isinstance(cryptokeys, list):
         cryptokeys = [cryptokeys]
     try:
-        return rhn.session.kickstart.profile.system.addKeys(rhn.key, kslabel, cryptokeys)
+        return rhn.session.kickstart.profile.system.addKeys(rhn.key, kslabel, cryptokeys) == 1
     except Exception, E:
         return rhn.fail(E, 'add GPG/SSL keys %s to kickstart %s' % (','.join(cryptokeys), kslabel))
 

@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 # RHN/Spacewalk API Module abstracting the 'channel' namespaces (see __doc__ below)
 #
-# Copyright 2009-2012 Stuart Sears
+# Copyright 2009-2014 Stuart Sears
 #
 # This file is part of python-rhnapi
 #
 # python-rhnapi is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free
-# Software Foundation, either version 2 of the License, or (at your option)
+# Software Foundation, either version 3 of the License, or (at your option)
 # any later version.
 #
 # python-rhnapi is distributed in the hope that it will be useful, but WITHOUT
@@ -304,7 +304,7 @@ def getDetails(rhn, chanspec):
     elif isinstance(chanspec, str):
         return detailsByLabel(rhn, chanspec)
     else:
-        return rhn.fail(E, 'get details for channel %s' % str(chanspec))
+        return None
 
 # --------------------------------------------------------------------------------- #
 
@@ -468,7 +468,6 @@ def listOrgs(rhn, chanlabel):
 #    * setUserSubscribable
 #    * subscribeSystem
 
-# --------------------------------------------------------------------------------- #
 
 def create(rhn, chanlabel, channame, summary, arch, parent='', checksum=None, gpgkey=None):
     """
@@ -512,7 +511,7 @@ def create(rhn, chanlabel, channame, summary, arch, parent='', checksum=None, gp
 
 # ---------------------------------------------------------------------------- #
 
-def createChannel(rhn, chanlabel, channame, summary, arch, **kwargs):
+def createChannel(rhn, label, name, summary, arch, parent=None, **kwargs):
     """
     API:
     channel.software.create
@@ -529,22 +528,28 @@ def createChannel(rhn, chanlabel, channame, summary, arch, **kwargs):
     Bool, or throws Exception.
 
     parameters:
-    rhn                     - an authenticated RHN session.
-    chanlabel (str)             - the new channel label. lowercase, no spaces.
-    channame (str)              - Human-readable channel name.
-    summary (str)           - summary of channel
-    arch (str)              - channel architecture [ IA-32, IA-64, PPC, Sparc, Sparc Solaris,
+    rhn                    - an authenticated RHN session.
+    chanlabel(str)         - the new channel label. lowercase, no spaces.
+    channame(str)          - Human-readable channel name.
+    summary(str)           - summary of channel
+    arch(str)              - channel architecture [ IA-32, IA-64, PPC, Sparc, Sparc Solaris,
                               i386 Solaris, iSeries, pSeries, s390, s390x, x86_64]
-    *parent (str)           - the parent channel chanlabel. leave blank to create a new base channel.
-    *checksum(str)          - 'sha1' or 'sha256'
-    *gpgkey(dict)           - gpg key information { 'url' : str, 'id' : str, 'fingerprint' : str }
+    *parent(str)           - parent channel label. Omit to create a base channel. Parent channel
+                             must already exist
+    *checksumType(str)     - 'sha1' or 'sha256'
+    *gpgKey(dict)          - gpg key information { 'url' : str, 'id' : str, 'fingerprint' : str }
 
     If gpgkey is provided, checksum is also required. Sorry, but that's just how it is.
     """
+    archLabel = "channel-%s" % arch
+    if parent is None:
+        parentLabel = ''
+    else:
+        parentLabel = parent
     try:
-        return rhn.session.channel.software.create(rhn.key, chanlabel, channame, summary, archLabel='channel-%s' % arch, **kwargs) == 1
+        return rhn.session.channel.software.create(rhn.key, label, name, summary, archLabel, parentLabel, **kwargs) == 1
     except Exception, E:
-        return rhn.fail(E, 'create software channel %s' % channame)
+        return rhn.fail(E, 'create software channel %s' % label)
 # --------------------------------------------------------------------------------- #
 
 def clone(rhn, source_channel, name, label, summary, parent_label=None, arch_label=None,
@@ -595,7 +600,7 @@ def clone(rhn, source_channel, name, label, summary, parent_label=None, arch_lab
 
 # --------------------------------------------------------------------------------- #
 
-def cloneChannel(rhn, chanlabel, noerrata = False, **kwargs):
+def cloneChannel(rhn, sourcelabel, noerrata = False, **kwargs):
     """
     API:
     channel.software.clone
@@ -620,7 +625,9 @@ def cloneChannel(rhn, chanlabel, noerrata = False, **kwargs):
     name (str)              - the new channel name
     label(str)              - the new channel label.
     summary(str)            - the new channel summary
-    no_errata(bool)         - do (not) clone errata!. Default False - channels are cloned with all applicable errata
+    noerrata(bool)         - do (not) clone errata!. 
+                             Default False - channels are cloned with all current errata from
+                             the chosen source channel   
     *parent_label(str)      - the new channel parent. If omitted, the clone is a base channel.
     *arch_label(str)        - the new channel arch. Keeps the original if omitted
     *gpg_url(str)           - URL for the clone gpg (public) key
@@ -629,21 +636,21 @@ def cloneChannel(rhn, chanlabel, noerrata = False, **kwargs):
     *description(str)       - cloned channel description
     """
     try:
-        res = rhn.session.channel.software.clone(rhn.key, chanlabel, kwargs, noerrata)
-    except Exception, E:
-        return rhn.fail(E, "clone channel %s as %s" %(chanlabel, kwargs['label']))
-
+        res = rhn.session.channel.software.clone(rhn.key, sourcelabel, kwargs, noerrata)
     # SH : For 5.4 just cloning via channel.software.clone is not enough apparently, see :
     # https://access.redhat.com/kb/docs/DOC-55475
     # Without this logic, kicstart profiles fail to find some packages in child channels,
     # meaning things basically don't work
-    if isinstance(res,int):
-        if ( noerrata == False):
-            rhn.session.channel.software.mergeErrata(rhn.key, chanlabel, kwargs['label'])
-        rhn.session.channel.software.mergePackages(rhn.key, chanlabel, kwargs['label'])
-        rhn.session.channel.software.regenerateNeededCache(rhn.key, kwargs['label'])
+        if isinstance(res,int):
+            if not noerrata:
+                mergederr = mergeErrata(rhn.key, sourcelabel, kwargs['label'])
+                mergedpkgs = mergePackages(rhn.key, sourcelabel, kwargs['label'])
+                cachegen = regenerateNeededCache(rhn.key, kwargs['label']) == 1
 
-    return isinstance(res, int)
+        return isinstance(res, int)
+    except Exception, E:
+        return rhn.fail(E, "clone channel %s as %s" %(sourcelabel, kwargs['label']))
+
 
 
 # --------------------------------------------------------------------------------- #
@@ -1181,7 +1188,7 @@ def mergeErrata(rhn, sourcechan, destchan, start_date=None, end_date=None):
     if end_date is None:
         # well, set the end date to *now*
         end_date = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-    if start_data is None:
+    if start_date is None:
         # the beginning of 1980 is more than old enough. That's pre-Linux
         start_date = time.strftime('%Y-%m-%d %H:%M:%S', (1980, 1, 1, 0, 0, 0, 0, 0, 0))
     try:

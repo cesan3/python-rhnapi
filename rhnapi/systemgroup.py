@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 # RHN/Spacewalk API Module abstracting the 'systemgroup' namespace
 #
-# Copyright 2009-2012 Stuart Sears
+# Copyright (c) 2009-2014 Stuart Sears
 #
 # This file is part of python-rhnapi
 #
 # python-rhnapi is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free
-# Software Foundation, either version 2 of the License, or (at your option)
+# Software Foundation, either version 3 of the License, or (at your option)
 # any later version.
 #
 # python-rhnapi is distributed in the hope that it will be useful, but WITHOUT
@@ -63,7 +63,7 @@ def addOrRemoveAdmins(rhn, sysgroup, adminlist, action):
     else:
         task = "ERROR: no action defined"
     try:
-        return rhn.session.systemgroup.addOrRemoveAdmins(rhn.key, sysgroup, adminlist, add) == 1
+        return rhn.session.systemgroup.addOrRemoveAdmins(rhn.key, sysgroup, adminlist, action) == 1
     except Exception, E:
         return rhn.fail(E, '%s one or more of %s as admin(s) of group %s' %( task, ','.join(adminlist), sysgroup))
 
@@ -157,7 +157,7 @@ def removeAdmin(rhn, sysgroup, adminlogin):
 
 # ---------------------------------------------------------------------------- #
 
-def addOrRemoveSystems(rhn, sysgroup, serverids, action):
+def addOrRemoveSystems(rhn, sysgroup, serverids, add=True):
     """
     API:
     systemgroup.addOrRemoveSystems
@@ -176,14 +176,12 @@ def addOrRemoveSystems(rhn, sysgroup, serverids, action):
     sysgroup(str)           - a system group name
     serverids(list/int)     - list of system IDs
     """
-    if action == 1:
+    if add:
         task = "add"
-    elif action == 0:
-        task = "remove"
     else:
-        task = "ERROR: no action defined"
+        task = "remove"
     try:
-        return rhn.session.systemgroup.addOrRemoveSystems(rhn.key, sysgroup, adminlist, action) == 1
+        return rhn.session.systemgroup.addOrRemoveSystems(rhn.key, sysgroup, serverids, add) == 1
     except Exception, E:
         return rhn.fail(E, '%s one or more of %s as members of group %s' %(task, ','.join(serverids), sysgroup))
 
@@ -453,7 +451,7 @@ def listAllGroups(rhn):
 
 # ---------------------------------------------------------------------------- #
 
-def listGroupsWithNoAssociatedAdmins(rhn, sysgroup):
+def listGroupsWithNoAssociatedAdmins(rhn):
     """
     API:
     systemgroup.listGroupsWithNoAssociatedAdmins
@@ -479,9 +477,9 @@ def listGroupsWithNoAssociatedAdmins(rhn, sysgroup):
     sysgroup                - the name of a system group
     """
     try:
-        return rhn.session.systemgroup.listGroupsWithNoAssociatedAdmins(rhn.key, sysgroup)
+        return rhn.session.systemgroup.listGroupsWithNoAssociatedAdmins(rhn.key)
     except Exception, E:
-        return rhn.fail(E, 'list active systems in group %s' % sysgroup)
+        return rhn.fail(E, 'list systems groups with no admin users')
 
 # ---------------------------------------------------------------------------- #
 
@@ -592,7 +590,7 @@ def scheduleApplyErrataToActive(rhn, sysgroup, errlist, runafter = None ):
         else:
             return rhn.session.systemgroup.scheduleApplyErrataToActive(rhn.key, sysgroup, errlist, runafter) == 1
     except Exception, E:
-        return rhn.fail(E, 'schedule errata [%s] on active systems in group %s' % (','.join(errlist),sysgroup))
+        return rhn.fail(E, 'schedule errata [%s] on active systems in group %s' % (','.join(errlist), sysgroup))
 
 # ---------------------------------------------------------------------------- #
     
